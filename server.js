@@ -3,12 +3,13 @@ const jwt = require('jsonwebtoken');
 const express = require('express');
 const app = express();
 
+const jwtPassword = 'mySecurePassword';
 const SERVER_PORT = 3000;
 
 app.use(express.json());
 
 const fakeUsers = [
-    new User(0, 'Harry', 'Hooker', 'harry@gmail.com', 'passwordHarry'),
+    new User(0, 'Harry', 'Hooker', 'harry@gmail.com', 'passwordHarry', true),
     new User(1, 'Andrea', 'López', 'andres@gmail.com', 'passwordAndrea')
 ];
 
@@ -18,6 +19,9 @@ const fakeUsers = [
  */
 const getUserByEmail = (email) => fakeUsers.find(user => user.email === email);
 
+/**
+ * Create a new user.
+ */
 app.post('/users', (req, res) => {
     const { firstName, lastName, email, password } = req.body;
     const userId = fakeUsers[fakeUsers.length - 1].id + 1;
@@ -40,6 +44,9 @@ app.post('/users', (req, res) => {
     }
 });
 
+/**
+ * Update a given user.
+ */
 app.put('/users', (req, res) => {
     const email = req.query.email;
     const { firstName, lastName, password } = req.body;
@@ -57,10 +64,36 @@ app.put('/users', (req, res) => {
     }
 });
 
+/**
+ * List all users if the user is Admin.
+ */
 app.get('/users', (req, res) => {
-    res.status(200).json({ data: fakeUsers });
+    const { authorization } = req.headers;
+
+    if (!authorization) {
+        res.status(400).json({ error: 'Missing token' });
+        return;
+    }
+
+    const token = authorization.split('Bearer ')[1];
+
+    const userInfo = validateToken(token);
+
+    if (userInfo) {
+        //Validate if user is admin.
+        if (userInfo.isAdmin) {
+            res.status(200).json({ data: fakeUsers });
+        } else {
+            res.status(403).json({ error: 'You don\'t have admin privileges' });
+        }
+    } else {
+        res.status(400).json({ error: 'Invalid token' });
+    }
 });
 
+/**
+ * Login and generate a JWT Token to made requests.
+ */
 app.post('/login', (req, res) => {
     const { email, password } = req.body;
 
@@ -84,16 +117,29 @@ app.post('/login', (req, res) => {
 });
 
 /**
- * 
- * @param {User} user 
- * @returns {String} Token.
+ * Create a token from the given user.
+ * @param {User} user User object.
+ * @returns {String} JWT Token.
  */
 const createToken = (user) => {
-    const jwtPassword = 'mySecurePassword';
-
     const token = jwt.sign({ email: user.email, isAdmin: user.isAdmin }, jwtPassword);
 
     return token;
+}
+
+/**
+ * Verify the token and return payload info.
+ * @param {String} token User token.
+ * @returns {Object} User info.
+ */
+const validateToken = (token) => {
+    try {
+        const userInfo = jwt.verify(token, jwtPassword);
+
+        return userInfo;
+    } catch (error) {
+        console.log(error.message);
+    }
 }
 
 /**
